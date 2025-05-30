@@ -123,6 +123,51 @@ cron.schedule('*/3 * * * * *', () => {
   fetchAndSavePositions();
 });
 
+app.get('/api/current_speed/:driverNumber', async (req, res) => {
+  const {driverNumber} = req.params;
+  try {
+    const sessionKey = await fetchLatestRaceSessionKey();
+    if (!sessionKey) {
+      return res.status(404).json({message: "No active session found."});
+    }
+
+    // Fetch car data (which includes speed) for the session and driver
+    const carDataResponse = await fetch(`https://api.openf1.org/v1/car_data?session_key=${sessionKey}&driver_number=${driverNumber}`);
+    if (!carDataResponse.ok) {
+      throw new Error(`HTTP error! status: ${carDataResponse.status}`);
+    }
+    const carData = await carDataResponse.json();
+
+    if (carData.length === 0) {
+      return res.status(404).json({message: "No car data found for this driver in the current session."});
+    }
+
+    // Sort by 'date' to get the latest speed entry
+    const latestCarData = carData.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+    // Fetch driver info to get full name
+    const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}&driver_number=${driverNumber}`);
+    if (!driverResponse.ok) {
+      throw new Error(`HTTP error! status: ${driverResponse.status}`);
+    }
+    const driverInfo = (await driverResponse.json())[0]; // Assuming one driver per number
+
+    if (!latestCarData || !latestCarData.speed) {
+      return res.status(404).json({message: "Speed data not available for this driver."});
+    }
+
+    res.json({
+      driver_number: driverNumber,
+      full_name: driverInfo ? driverInfo.full_name : `Driver ${driverNumber}`,
+      speed: latestCarData.speed,
+      date: latestCarData.date
+    });
+
+  } catch (error) {
+    console.error(`Error fetching speed for driver ${driverNumber}:`, error);
+    res.status(500).json({message: "Internal server error"});
+  }
+});
 app.get('/api/positions/history/:driverNumber', async (req, res) => {
   const {driverNumber} = req.params;
   try {

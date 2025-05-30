@@ -1,88 +1,111 @@
 import React, {useEffect, useState} from 'react';
-import {motion, AnimatePresence} from 'framer-motion';
+import {motion, AnimatePresence} from 'framer-motion'; // Keep these for potential animations
 
 export default function SpeedDisplay() {
-  const [driverSpeeds, setDriverSpeeds] = useState({}); // Stores driver_number: speed
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [driverOptions, setDriverOptions] = useState([]); // To populate the dropdown
+  const [currentSpeed, setCurrentSpeed] = useState(null);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
+  const backendUrl = 'http://localhost:3001'; // Your backend URL
+
+  // Fetch list of drivers who have position data (to select from)
   useEffect(() => {
-    async function fetchLatestRaceSessionKey() {
-      const sessionResponse = await fetch('https://api.openf1.org/v1/sessions');
-      const sessions = await sessionResponse.json();
-
-      const raceSessions = sessions
-        .filter(s => s.session_type === "Race")
-        .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
-
-      const latestRace = raceSessions[0];
-
-      return latestRace ? latestRace.session_key : null;
-    }
-
-    async function fetchSpeedData() {
+    async function fetchDrivers() {
       try {
-        const sessionKey = await fetchLatestRaceSessionKey();
-        if (!sessionKey) {
-          console.error("No active races found to fetch speed data.");
-          return;
+        const response = await fetch(`${backendUrl}/api/drivers_with_position_data`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-
-        // Fetch car data which includes speed
-        const carDataResponse = await fetch(`https://api.openf1.org/v1/car_data?session_key=${sessionKey}`);
-        const carData = await carDataResponse.json();
-
-        // Fetch driver data to get names
-        const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
-        const driverData = await driverResponse.json();
-        const driverMap = new Map(driverData.map(driver => [driver.driver_number, driver.full_name]));
-
-
-        const latestSpeeds = {};
-        // Group car data by driver and find the latest speed for each
-        carData.forEach(data => {
-          if (!latestSpeeds[data.driver_number] || data.date > latestSpeeds[data.driver_number].date) {
-            latestSpeeds[data.driver_number] = {
-              speed: data.speed,
-              date: data.date,
-              full_name: driverMap.get(data.driver_number) || `Driver #${data.driver_number}`
-            };
-          }
-        });
-
-        setDriverSpeeds(latestSpeeds);
-
-      } catch (error) {
-        console.error('Error fetching speed data:', error);
+        const drivers = await response.json();
+        setDriverOptions(drivers);
+        if (drivers.length > 0) {
+          setSelectedDriver(drivers[0].driver_number); // Select the first driver by default
+        }
+      } catch (err) {
+        console.error("Error fetching driver options for SpeedDisplay:", err);
+        setError("Failed to load driver options.");
       }
     }
 
-    fetchSpeedData();
-    const interval = setInterval(fetchSpeedData, 3000); // Update every 3 seconds
-
-    return () => clearInterval(interval);
+    fetchDrivers();
   }, []);
 
+  // Fetch speed for the selected driver
+  useEffect(() => {
+    async function fetchSpeed() {
+      if (!selectedDriver) {
+        setCurrentSpeed(null); // Clear speed if no driver selected
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${backendUrl}/api/current_speed/${selectedDriver}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setCurrentSpeed(data);
+      } catch (err) {
+        console.error(`Error fetching speed for driver ${selectedDriver}:`, err);
+        setError("Failed to load speed data.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchSpeed();
+    const interval = setInterval(fetchSpeed, 1000); // Fetch speed every 1 second
+    return () => clearInterval(interval);
+
+  }, [selectedDriver]); // Re-run when selectedDriver changes
+
+  const handleDriverChange = (event) => {
+    setSelectedDriver(parseInt(event.target.value));
+  };
+
+  if (error) {
+    return <div className="speed-display-container error-message">{error}</div>;
+  }
+
+  if (isLoading && currentSpeed === null) {
+    return <div className="speed-display-container">Loading speed data...</div>;
+  }
+
   return (
-    <div className="speed-list">
-      {Object.keys(driverSpeeds).length === 0 ? (
-        <div>Loading speeds...</div>
-      ) : (
-        <AnimatePresence>
-          {Object.entries(driverSpeeds)
-            .sort(([, a], [, b]) => b.speed - a.speed) // Sort by speed descending
-            .map(([driverNumber, data]) => (
-              <motion.div
-                key={driverNumber}
-                layout
-                initial={{opacity: 0, y: -20}}
-                animate={{opacity: 1, y: 0}}
-                exit={{opacity: 0, y: 20}}
-                transition={{duration: 0.4}}
-                className="speed-item"
-              >
-                {data.full_name}: {data.speed} km/h
-              </motion.div>
-            ))}
+    <div className="speed-display-container">
+      <div className="driver-select">
+        <label htmlFor="speed-driver-select">Select Driver: </label>
+        <select id="speed-driver-select" onChange={handleDriverChange} value={selectedDriver || ''}>
+          {driverOptions.map(driver => (
+            <option key={driver.driver_number} value={driver.driver_number}>
+              {driver.full_name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {currentSpeed ? (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentSpeed.speed} // Animate on speed change
+            initial={{opacity: 0, y: 20}}
+            animate={{opacity: 1, y: 0}}
+            exit={{opacity: 0, y: -20}}
+            transition={{duration: 0.3}}
+            className="speed-value"
+          >
+            {currentSpeed.full_name}: <span className="highlight-speed">{currentSpeed.speed}</span> km/h
+            <div className="speed-timestamp">
+              (Last updated: {new Date(currentSpeed.date).toLocaleTimeString()})
+            </div>
+          </motion.div>
         </AnimatePresence>
+      ) : (
+        !isLoading && <p>No speed data available for the selected driver yet.</p>
       )}
     </div>
   );

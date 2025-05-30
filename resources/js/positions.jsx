@@ -3,100 +3,71 @@ import {motion, AnimatePresence} from 'framer-motion';
 
 export default function Positions() {
   const [positions, setPositions] = useState([]);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  const backendUrl = 'http://localhost:3001';
   useEffect(() => {
-    async function fetchLatestRaceSessionKey() {
-      const sessionResponse = await fetch('https://api.openf1.org/v1/sessions');
-      const sessions = await sessionResponse.json();
-
-      const raceSessions = sessions
-        .filter(s => s.session_type === "Race")
-        .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
-
-      const latestRace = raceSessions[0];
-
-      return latestRace ? latestRace.session_key : null;
-    }
-
-    async function fetchPositions() {
+    const fetchCurrentPositions = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        const sessionKey = await fetchLatestRaceSessionKey();
-        if (!sessionKey) {
-          console.error("Ingen aktive løb");
-          return;
+        const response = await fetch(`${backendUrl}/api/current_positions`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-
-        const positionResponse = await fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`);
-        const positionData = await positionResponse.json();
-
-        const driverResponse = await fetch('https://api.openf1.org/v1/drivers?session_key=10033');
-        const driverData = await driverResponse.json();
-
-        const latestPositionsMap = new Map();
-        positionData.forEach(pos => {
-          latestPositionsMap.set(pos.driver_number, pos);
-        });
-
-        const latestPositions = Array.from(latestPositionsMap.values());
-
-        const validTeams = [
-          'Red Bull Racing', 'Ferrari', 'McLaren', 'Mercedes', 'Aston Martin',
-          'Alpine', 'Williams', 'Haas F1 Team', 'Racing Bulls', 'Kick Sauber'
-        ];
-
-        const activeDrivers = driverData
-          //.filter(driver => driver.position >= 1 && driver.position <= 20)
-          .map(driver => {
-            const driverInfo = latestPositions.find(d => d.driver_number === driver.driver_number);
-            return {
-              ...driver,
-              name: driverInfo ? driverInfo.full_name : `Driver #${driver.driver_number}`,
-              team: driverInfo ? driverInfo.team_name : 'Unknown',
-              position: driverInfo ? driverInfo.position : null
-            };
-          })
-          .filter(driver =>
-            validTeams.includes(driver.team)
-          )
-          .sort((a, b) => a.position - b.position);
-
-        setPositions(activeDrivers);
-      } catch (error) {
-        console.error('Fejl: Kan ikke fetche positioner:', error);
+        const data = await response.json();
+        setPositions(data);
+      } catch (err) {
+        console.error("Failed to fetch current positions from backend:", err);
+        setError("Failed to load current positions.");
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
 
+    // Fetch initially
+    fetchCurrentPositions();
 
-    fetchPositions();
+    // Set up interval to refetch every 3 seconds
+    const intervalId = setInterval(fetchCurrentPositions, 3000);
 
+    // Clean up the interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount
 
-    const interval = setInterval(fetchPositions, 3000);
+  if (isLoading && positions.length === 0) {
+    return <div className="positions-list">Loading positions...</div>;
+  }
 
-    return () => clearInterval(interval);
-  }, []);
+  if (error) {
+    return <div className="positions-list error-message">{error}</div>;
+  }
+
+  if (positions.length === 0 && !isLoading) {
+    return <div className="positions-list">No current position data available.</div>;
+  }
 
   return (
     <div className="positions-list">
-      {positions.length === 0 ? (
-        <div>Loading positions...</div>
-      ) : (
-        <AnimatePresence>
-          {positions.map((driver, index) => (
-            <motion.div
-              key={driver.driver_number}
-              layout //
-              initial={{opacity: 0, y: -20}}
-              animate={{opacity: 1, y: 0}}
-              exit={{opacity: 0, y: 20}}
-              transition={{duration: 0.4}}
-              className="positions-item"
-            >
-              #{index + 1}-{driver.name}({driver.team})
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      )}
+      <AnimatePresence>
+        {positions.map((driver, index) => (
+          <motion.div
+            key={driver.driver_number} // Use driver_number as key as it's unique and stable
+            layout
+            initial={{opacity: 0, y: -20}}
+            animate={{opacity: 1, y: 0}}
+            exit={{opacity: 0, y: 20}}
+            transition={{duration: 0.4}}
+            className="positions-item"
+            style={{borderLeft: `5px solid #${driver.team_color}`}} {/* Add team color stripe */}
+          >
+            <span className="position-number">#{driver.position}</span>
+            <span className="driver-name">{driver.full_name}</span>
+            <span className="team-name">({driver.team_name})</span>
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }
-
