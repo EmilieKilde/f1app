@@ -4,79 +4,118 @@ import {
 } from 'recharts';
 
 export default function RaceTimelineGraph() {
-  const [selectedDriver, setSelectedDriver] = useState(null);
   const [driverOptions, setDriverOptions] = useState([]);
+  const [selectedDriver, setSelectedDriver] = useState(null);
   const [positionHistory, setPositionHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const backendUrl = 'http://localhost:3001'; // Your backend URL
+  console.log('🔥 Component state:', {
+    selectedDriver,
+    driverOptionsLength: driverOptions.length,
+    positionHistoryLength: positionHistory.length,
+    isLoading,
+    error
+  });
 
+  // First useEffect: Fetch drivers (this works!)
   useEffect(() => {
+    console.log('🔥 Fetching drivers...');
+
     async function fetchDrivers() {
       try {
-        const response = await fetch(`${backendUrl}/api/drivers_with_position_data`);
+        const response = await fetch('http://localhost:3001/api/drivers_with_position_data');
+        console.log('🔥 Drivers response:', response.status, response.ok);
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
+
         const drivers = await response.json();
+        console.log('🔥 Loaded drivers:', drivers.length);
+
         setDriverOptions(drivers);
+
         if (drivers.length > 0) {
           setSelectedDriver(drivers[0].driver_number);
+          console.log('🔥 Auto-selected driver:', drivers[0].driver_number);
         }
-      } catch (err) {
-        console.error("Error fetching driver options:", err);
-        setError("Failed to load driver options.");
+      } catch (error) {
+        console.error('🔥 Error fetching drivers:', error);
+        setError('Failed to load drivers: ' + error.message);
       }
     }
 
     fetchDrivers();
   }, []);
 
+  // Second useEffect: Fetch position history for selected driver
   useEffect(() => {
-    async function fetchPositionHistory() {
-      if (!selectedDriver) return;
+    if (!selectedDriver) {
+      console.log('🔥 No driver selected, skipping position fetch');
+      return;
+    }
 
+    console.log('🔥 Fetching position history for driver:', selectedDriver);
+
+    async function fetchPositionHistory() {
       setIsLoading(true);
       setError(null);
+
       try {
-        const response = await fetch(`<span class="math-inline">\{backendUrl\}/api/positions/history/</span>{selectedDriver}`);
+        const response = await fetch(`http://localhost:3001/api/positions/history/${selectedDriver}`);
+        console.log('🔥 Position history response:', response.status, response.ok);
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        let data = await response.json();
 
+        let data = await response.json();
+        console.log('🔥 Raw position data:', data);
+
+        // Handle case where backend returns error object instead of array
+        if (!Array.isArray(data)) {
+          if (data.message) {
+            console.log('🔥 Backend message:', data.message);
+            setPositionHistory([]);
+            return;
+          }
+          throw new Error('Expected array but got: ' + typeof data);
+        }
+
+        // Process the data
         data = data.map(item => ({
           ...item,
           date: new Date(item.date)
         })).sort((a, b) => a.date - b.date);
 
+        console.log('🔥 Processed position data:', data.length, 'records');
         setPositionHistory(data);
-      } catch (err) {
-        console.error(`Error fetching position history for driver ${selectedDriver}:`, err);
-        setError("Failed to load position history.");
+
+      } catch (error) {
+        console.error('🔥 Error fetching position history:', error);
+        setError('Failed to load position history: ' + error.message);
       } finally {
         setIsLoading(false);
       }
     }
 
     fetchPositionHistory();
+
+    // Set up auto-refresh every 3 seconds
     const interval = setInterval(fetchPositionHistory, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      console.log('🔥 Clearing interval for driver:', selectedDriver);
+      clearInterval(interval);
+    };
 
   }, [selectedDriver]);
 
   const handleDriverChange = (event) => {
-    setSelectedDriver(parseInt(event.target.value));
+    const newDriver = parseInt(event.target.value);
+    console.log('🔥 Driver changed to:', newDriver);
+    setSelectedDriver(newDriver);
   };
-
-  if (error) {
-    return <div className="error-message">{error}</div>;
-  }
-
-  if (isLoading && positionHistory.length === 0) {
-    return <div>Loading race timeline...</div>;
-  }
 
   const formatXAxis = (tickItem) => {
     if (tickItem instanceof Date) {
@@ -88,23 +127,38 @@ export default function RaceTimelineGraph() {
   const CustomTooltip = ({active, payload, label}) => {
     if (active && payload && payload.length) {
       return (
-        <div className="custom-tooltip" style={{backgroundColor: '#fff', padding: '10px', border: '1px solid #ccc'}}>
-          <p className="label">{`Time: ${new Date(label).toLocaleTimeString()}`}</p>
-          <p className="intro">{`${payload[0].payload.full_name}: Position ${payload[0].value}`}</p>
+        <div style={{
+          backgroundColor: '#fff',
+          padding: '10px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <p style={{margin: 0, fontWeight: 'bold'}}>
+            Time: {new Date(label).toLocaleTimeString()}
+          </p>
+          <p style={{margin: 0, color: '#FF1801'}}>
+            {payload[0].payload.full_name}: Position {payload[0].value}
+          </p>
         </div>
       );
     }
     return null;
   };
 
-  const fixedMinY = 0;
-  const fixedMaxY = 22;
-
   return (
     <div className="race-timeline-container">
-      <div className="driver-select">
-        <label htmlFor="driver-select">Select Driver: </label>
-        <select id="driver-select" onChange={handleDriverChange} value={selectedDriver || ''}>
+      {/* Driver Selection */}
+      <div style={{marginBottom: '15px'}}>
+        <label htmlFor="driver-select" style={{marginRight: '10px'}}>
+          Select Driver:
+        </label>
+        <select
+          id="driver-select"
+          onChange={handleDriverChange}
+          value={selectedDriver || ''}
+          style={{padding: '5px', minWidth: '200px'}}
+        >
           {driverOptions.map(driver => (
             <option key={driver.driver_number} value={driver.driver_number}>
               {driver.full_name}
@@ -113,13 +167,38 @@ export default function RaceTimelineGraph() {
         </select>
       </div>
 
+      {/* Status Info */}
+      <div style={{
+        fontSize: '12px',
+        color: '#666',
+        marginBottom: '15px',
+        display: 'flex',
+        gap: '15px'
+      }}>
+        <span>Driver: {selectedDriver || 'None'}</span>
+        <span>Records: {positionHistory.length}</span>
+        {isLoading && <span style={{color: '#ff6600'}}>⟳ Updating...</span>}
+      </div>
+
+      {/* Error Display */}
+      {error && (
+        <div style={{
+          color: '#ff4444',
+          backgroundColor: '#ffebee',
+          padding: '10px',
+          borderRadius: '4px',
+          marginBottom: '15px'
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* Chart */}
       {positionHistory.length > 0 ? (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart
             data={positionHistory}
-            margin={{
-              top: 5, right: 30, left: 20, bottom: 5,
-            }}
+            margin={{top: 5, right: 30, left: 20, bottom: 5}}
           >
             <CartesianGrid strokeDasharray="3 3"/>
             <XAxis
@@ -129,9 +208,9 @@ export default function RaceTimelineGraph() {
               allowDuplicatedCategory={false}
             />
             <YAxis
-              domain={[fixedMinY, fixedMaxY]}
+              domain={[0, 22]}
               reversed={true}
-              tickCount={22}
+              tickCount={11}
               label={{value: 'Position', angle: -90, position: 'insideLeft'}}
             />
             <Tooltip content={<CustomTooltip/>}/>
@@ -140,13 +219,42 @@ export default function RaceTimelineGraph() {
               type="stepAfter"
               dataKey="position"
               stroke="#FF1801"
-              activeDot={{r: 8}}
+              strokeWidth={2}
+              activeDot={{r: 6}}
               name="Position"
             />
           </LineChart>
         </ResponsiveContainer>
       ) : (
-        !isLoading && <p>No position data available for the selected driver yet.</p>
+        !isLoading && selectedDriver && (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px',
+            color: '#666',
+            backgroundColor: '#f5f5f5',
+            borderRadius: '4px'
+          }}>
+            No position data available
+            for {driverOptions.find(d => d.driver_number === selectedDriver)?.full_name || 'this driver'} yet.
+            <br/>
+            <small>Position data will appear as the race progresses.</small>
+          </div>
+        )
+      )}
+
+      {/* Debug info for development */}
+      {process.env.NODE_ENV === 'development' && (
+        <details style={{marginTop: '20px', fontSize: '11px', color: '#999'}}>
+          <summary>Debug Info</summary>
+          <pre>{JSON.stringify({
+            selectedDriver,
+            driverOptionsCount: driverOptions.length,
+            positionHistoryCount: positionHistory.length,
+            isLoading,
+            error,
+            lastUpdate: positionHistory.length > 0 ? positionHistory[positionHistory.length - 1]?.date : null
+          }, null, 2)}</pre>
+        </details>
       )}
     </div>
   );

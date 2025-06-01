@@ -60,7 +60,7 @@ export default function Positions() {
             exit={{opacity: 0, y: 20}}
             transition={{duration: 0.4}}
             className="positions-item"
-            style={{borderLeft: `5px solid #${driver.team_color}`}} {/* Add team color stripe */}
+            //style={{borderLeft: `5px solid #${driver.team_color}`}} {/* Add team color stripe */}
           >
             <span className="position-number">#{driver.position}</span>
             <span className="driver-name">{driver.full_name}</span>
