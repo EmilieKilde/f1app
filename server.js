@@ -1,13 +1,13 @@
 import dotenv from 'dotenv';
 
-dotenv.config(); // Call config() after import
+dotenv.config(); // kald config() efter import
 
 import express from 'express';
 import pkg from 'pg'; // import as 'pkg' because Pool is a named export or property
 const {Pool} = pkg; // Destructure Pool from pkg
 
 import cors from 'cors';
-import cron from 'node-cron'; // node-cron also supports import
+import cron from 'node-cron';
 
 const app = express();
 const port = 3001; // Backend runs on port 3001
@@ -15,7 +15,7 @@ const TESTING_MODE = true;
 app.use(cors());
 app.use(express.json());
 
-// PostgreSQL connection pool - UPDATED VARIABLE NAMES
+// databse connection pool
 const pool = new Pool({
   user: process.env.DB_NODE_USER,      // Use DB_NODE_USER
   host: process.env.DB_NODE_HOST,      // Use DB_NODE_HOST
@@ -24,10 +24,10 @@ const pool = new Pool({
   port: Number(process.env.DB_NODE_PORT),      // Use DB_NODE_PORT
 });
 
-// Function to fetch the latest race session key
+//fetch nyeste race session key
 async function fetchLatestRaceSessionKey() {
   try {
-    const sessionResponse = await fetch('https://api.openf1.org/v1/sessions?session_key=9971');
+    const sessionResponse = await fetch('https://api.openf1.org/v1/sessions?session_key=latest');
     if (!sessionResponse.ok) {
       throw new Error(`HTTP error! status: ${sessionResponse.status}`);
     }
@@ -45,10 +45,10 @@ async function fetchLatestRaceSessionKey() {
     const latestSession = targetSessions[0];
 
     if (latestSession) {
-      console.log(`[LIVE] Selected session: ${latestSession.session_name} (${latestSession.session_type}, Key: ${latestSession.session_key})`);
+      console.log(` Selected session: ${latestSession.session_name} (${latestSession.session_type}, Key: ${latestSession.session_key})`);
       return latestSession.session_key;
     } else {
-      console.warn("[LIVE] No suitable sessions found");
+      console.warn("No suitable sessions found");
       return null;
     }
   } catch (error) {
@@ -57,23 +57,23 @@ async function fetchLatestRaceSessionKey() {
   }
 }
 
-// Function to fetch and save position data
+// fetch og gem positioner
 async function fetchAndSavePositions() {
   let client;
   try {
     client = await pool.connect();
-    console.log("✅ Database connection established");
+    console.log("Database connection established");
 
     //const sessionKey = await fetchLatestRaceSessionKey();
     const sessionKey = '9971';
     console.log(`Session key result: ${sessionKey}`);
 
     if (!sessionKey) {
-      console.warn("❌ No session found. Skipping position data fetch.");
+      console.warn("No session found. Skipping position data fetch.");
       return;
     }
 
-    console.log(`🏁 Fetching position data for session: ${sessionKey}`);
+    console.log(`Fetching position data for session: ${sessionKey}`);
     const positionResponse = await fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}`);
 
     if (!positionResponse.ok) {
@@ -81,14 +81,14 @@ async function fetchAndSavePositions() {
     }
 
     const positionData = await positionResponse.json();
-    console.log(`📊 Retrieved ${positionData.length} position data points`);
+    console.log(`Retrieved ${positionData.length} position data points`);
 
     if (positionData.length === 0) {
       console.warn("⚠️ No position data found for this session");
       return;
     }
 
-    console.log(`🏎️ Fetching driver data for session: ${sessionKey}`);
+    console.log(`Fetching driver data for session: ${sessionKey}`);
     const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
 
     if (!driverResponse.ok) {
@@ -96,7 +96,7 @@ async function fetchAndSavePositions() {
     }
 
     const driverData = await driverResponse.json();
-    console.log(`👨‍🏁 Retrieved ${driverData.length} drivers`);
+    console.log(`Retrieved ${driverData.length} drivers`);
 
     const driverMap = new Map(driverData.map(d => [d.driver_number, d]));
 
@@ -106,11 +106,10 @@ async function fetchAndSavePositions() {
     ];
 
     if (TESTING_MODE) {
-      // In test mode, simulate live data by taking position data from different time points
-      // and treating them as if they're happening now
-      console.log("🧪 TEST MODE: Simulating live data updates");
+      // Fordi det meget rart at kunne arbejde på skidtet uden et løb er igang :))
+      console.log("TEST MODE: Simulating live data updates");
 
-      // Group position data by timestamp and take several recent ones
+      // grupper data efter timestamp
       const positionsByTime = new Map();
       positionData.forEach(pos => {
         if (!positionsByTime.has(pos.date)) {
@@ -119,14 +118,14 @@ async function fetchAndSavePositions() {
         positionsByTime.get(pos.date).push(pos);
       });
 
-      // Get the last few timestamps
+      // Tag sidste 5 timestamps
       const timestamps = Array.from(positionsByTime.keys())
         .sort()
-        .slice(-5); // Take last 5 timestamps
+        .slice(-5);
 
       console.log(`Found ${timestamps.length} different timestamps to simulate`);
 
-      // Process each timestamp as if it's happening now
+
       for (const timestamp of timestamps) {
         const positions = positionsByTime.get(timestamp);
         console.log(`Processing ${positions.length} positions from ${timestamp}`);
@@ -137,10 +136,10 @@ async function fetchAndSavePositions() {
             const full_name = driverInfo.full_name;
             const team_name = driverInfo.team_name;
             const position = pos.position;
-            // Use current time instead of historical time to simulate live data
+            // Vi laver en fakedato
             const fakeDate = new Date(); // Current time!
 
-            // Add some randomness to avoid duplicate timestamps
+            // Randomizer lidt så vi ikke får det samme flere gange
             fakeDate.setMilliseconds(fakeDate.getMilliseconds() + Math.random() * 1000);
 
             const exists = await client.query(
@@ -163,11 +162,11 @@ async function fetchAndSavePositions() {
           }
         }
 
-        // Add a small delay between timestamps to spread out the data
+        // delay mellem timestamps for at sprede data lidt ud
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     } else {
-      // Original live mode logic
+      // Live mode
       const latestPositionsMap = new Map();
       positionData.forEach(pos => {
         if (!latestPositionsMap.has(pos.driver_number) || new Date(pos.date) > new Date(latestPositionsMap.get(pos.driver_number).date)) {
@@ -175,7 +174,7 @@ async function fetchAndSavePositions() {
         }
       });
 
-      console.log(`🔄 Processing ${latestPositionsMap.size} unique drivers with latest positions`);
+      console.log(`Processing ${latestPositionsMap.size} unique drivers with latest positions`);
       for (const [driverNumber, pos] of latestPositionsMap.entries()) {
         const driverInfo = driverMap.get(driverNumber);
 
@@ -200,29 +199,30 @@ async function fetchAndSavePositions() {
                VALUES ($1, $2, $3, $4, $5, $6)`,
               [sessionKey, driverNumber, full_name, team_name, position, date]
             );
-            console.log(`✅ Inserted: ${full_name} - Position ${position}`);
+            console.log(`Inserted: ${full_name} - Position ${position}`);
           }
         }
       }
     }
 
-    console.log("✅ Position data processing completed successfully.");
+    console.log("Position data processing completed successfully.");
 
   } catch (error) {
-    console.error("❌ Error in fetchAndSavePositions:", error);
+    console.error("Error in fetchAndSavePositions:", error);
   } finally {
     if (client) {
       client.release();
-      console.log("🔌 Database connection released");
+      console.log("Database connection released");
     }
   }
 }
 
+//opdatere hvert 5. sekund ved at kører funktionen
 cron.schedule('*/5 * * * * *', () => {
   fetchAndSavePositions();
 });
 
-// Enhanced API endpoints with detailed logging
+// Endpoints til de klasser der håndterer cards
 app.get('/api/current_positions', async (req, res) => {
   try {
     //const sessionKey = await fetchLatestRaceSessionKey();
@@ -255,7 +255,6 @@ app.get('/api/current_positions', async (req, res) => {
       }
     }
 
-    // ✅ Deduplicate by driver_number
     const seen = new Set();
     const uniquePositions = [];
 
@@ -285,7 +284,7 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
       return res.status(404).json({message: "No active session found."});
     }
 
-    // Get driver info first
+    // Get driver info først
     const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=9971&driver_number=${driverNumber}`);
 
     if (!driverResponse.ok) {
@@ -299,12 +298,12 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
     }
 
     if (TESTING_MODE) {
-      // In test mode, generate realistic fake speed data
-      console.log("🧪 TEST MODE: Generating simulated speed data");
+      // simulations data til speed
+      console.log("TEST MODE: Generating simulated speed data");
 
-      // Generate realistic F1 speeds (200-350 km/h)
+      // Generere realistisk F1 speed (200-350 km/h)
       const baseSpeed = 250 + Math.random() * 100; // 250-350 km/h
-      const speed = Math.round(baseSpeed * 10) / 10; // Round to 1 decimal
+      const speed = Math.round(baseSpeed * 10) / 10; // Rund til 1 decimal
 
       const speedResponse = {
         driver_number: driverNumber,
@@ -317,7 +316,7 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
       res.json(speedResponse);
 
     } else {
-      // Live mode - get real speed from OpenF1
+      // Live mode
       console.log("🔴 LIVE MODE: Getting real speed from OpenF1");
 
       const carDataResponse = await fetch(`https://api.openf1.org/v1/car_data?session_key=9971&driver_number=${driverNumber}&limit=1&order=desc`);
