@@ -11,8 +11,7 @@ import cron from 'node-cron'; // node-cron also supports import
 
 const app = express();
 const port = 3001; // Backend runs on port 3001
-const TESTING_MODE = true; // Set to false for live mode
-const TEST_SESSION_KEY = null; // Will be auto-detected
+const TESTING_MODE = true;
 app.use(cors());
 app.use(express.json());
 
@@ -22,94 +21,36 @@ const pool = new Pool({
   host: process.env.DB_NODE_HOST,      // Use DB_NODE_HOST
   database: process.env.DB_NODE_DATABASE, // Use DB_NODE_DATABASE
   password: process.env.DB_NODE_PASSWORD, // Use DB_NODE_PASSWORD
-  port: process.env.DB_NODE_PORT,      // Use DB_NODE_PORT
+  port: Number(process.env.DB_NODE_PORT),      // Use DB_NODE_PORT
 });
 
 // Function to fetch the latest race session key
 async function fetchLatestRaceSessionKey() {
   try {
-    // If we have a hardcoded test session key, use it
-    if (TESTING_MODE && TEST_SESSION_KEY) {
-      console.log(`[TEST MODE] Using hardcoded session key: ${TEST_SESSION_KEY}`);
-      return TEST_SESSION_KEY;
-    }
-
-    const sessionResponse = await fetch('https://api.openf1.org/v1/sessions');
+    const sessionResponse = await fetch('https://api.openf1.org/v1/sessions?session_key=9971');
     if (!sessionResponse.ok) {
       throw new Error(`HTTP error! status: ${sessionResponse.status}`);
     }
+
     const sessions = await sessionResponse.json();
 
-    let targetSessions;
-
-    if (TESTING_MODE) {
-      console.log(`\n--- TEST MODE: Looking for recent sessions ---`);
-      // In test mode, look for sessions from the last 7 days
-      const currentTime = new Date();
-      const sevenDaysAgo = new Date(currentTime.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-      console.log(`Current time: ${currentTime.toISOString()}`);
-      console.log(`Looking for sessions after: ${sevenDaysAgo.toISOString()}`);
-
-      targetSessions = sessions
-        .filter(s => {
-          const sessionEndTime = new Date(s.date_end);
-          const isTargetType = (s.session_type === "Qualifying" || s.session_type === "Race");
-          const isRecent = sessionEndTime > sevenDaysAgo;
-
-          if (isTargetType) {
-            console.log(`[TEST] Found session: ${s.session_name} (${s.session_type}) - End: ${sessionEndTime.toISOString()} - Recent: ${isRecent} - Key: ${s.session_key}`);
-          }
-
-          return isTargetType && isRecent;
-        })
-        .sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
-
-    } else {
-      // Live mode - original logic
-      const currentTime = new Date();
-      const sixHoursAgo = new Date(currentTime.getTime() - 6 * 60 * 60 * 1000);
-
-      console.log(`\n--- LIVE MODE: Looking for active sessions ---`);
-      console.log(`Current time: ${currentTime.toISOString()}`);
-      console.log(`Looking for sessions ending after: ${sixHoursAgo.toISOString()}`);
-
-      targetSessions = sessions
-        .filter(s => {
-          const sessionEndTime = new Date(s.date_end);
-          const isTargetType = (s.session_type === "Qualifying" || s.session_type === "Race");
-          const hasEndedRecently = sessionEndTime > sixHoursAgo;
-
-          if (isTargetType) {
-            console.log(`[LIVE] Found session: ${s.session_name} (${s.session_type}) - End: ${sessionEndTime.toISOString()} - Recent: ${hasEndedRecently} - Key: ${s.session_key}`);
-          }
-
-          return isTargetType && hasEndedRecently;
-        })
-        .sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
-    }
+    const targetSessions = sessions
+      .filter(s => {
+        const sessionEndTime = new Date(s.date_end);
+        const isTargetType = (s.session_type === "Qualifying" || s.session_type === "Race");
+        return isTargetType && sessionEndTime != null;
+      })
+      .sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
 
     const latestSession = targetSessions[0];
+
     if (latestSession) {
-      console.log(`[${TESTING_MODE ? 'TEST' : 'LIVE'}] Selected session: ${latestSession.session_name} (${latestSession.session_type}, Key: ${latestSession.session_key})`);
-      console.log(`Session date: ${latestSession.date_start} to ${latestSession.date_end}`);
+      console.log(`[LIVE] Selected session: ${latestSession.session_name} (${latestSession.session_type}, Key: ${latestSession.session_key})`);
+      return latestSession.session_key;
     } else {
-      console.warn(`[${TESTING_MODE ? 'TEST' : 'LIVE'}] No suitable sessions found`);
-
-      // In test mode, show all recent sessions for debugging
-      if (TESTING_MODE) {
-        console.log("\n[TEST DEBUG] All sessions from last 7 days:");
-        const recentSessions = sessions
-          .filter(s => new Date(s.date_end) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-          .sort((a, b) => new Date(b.date_end) - new Date(a.date_end));
-
-        recentSessions.forEach(s => {
-          console.log(`  - ${s.session_name} (${s.session_type}) - Key: ${s.session_key} - End: ${s.date_end}`);
-        });
-      }
+      console.warn("[LIVE] No suitable sessions found");
+      return null;
     }
-
-    return latestSession ? latestSession.session_key : null;
   } catch (error) {
     console.error("Error fetching latest session key:", error);
     return null;
@@ -118,15 +59,13 @@ async function fetchLatestRaceSessionKey() {
 
 // Function to fetch and save position data
 async function fetchAndSavePositions() {
-  console.log(`\n=== ${TESTING_MODE ? 'TEST MODE' : 'LIVE MODE'} - FETCH AND SAVE POSITIONS ===`);
-  console.log(`Timestamp: ${new Date().toISOString()}`);
-
   let client;
   try {
     client = await pool.connect();
     console.log("✅ Database connection established");
 
-    const sessionKey = await fetchLatestRaceSessionKey();
+    //const sessionKey = await fetchLatestRaceSessionKey();
+    const sessionKey = '9971';
     console.log(`Session key result: ${sessionKey}`);
 
     if (!sessionKey) {
@@ -199,10 +138,10 @@ async function fetchAndSavePositions() {
             const team_name = driverInfo.team_name;
             const position = pos.position;
             // Use current time instead of historical time to simulate live data
-            const date = new Date(); // Current time!
+            const fakeDate = new Date(); // Current time!
 
             // Add some randomness to avoid duplicate timestamps
-            date.setMilliseconds(date.getMilliseconds() + Math.random() * 1000);
+            fakeDate.setMilliseconds(fakeDate.getMilliseconds() + Math.random() * 1000);
 
             const exists = await client.query(
               `SELECT 1
@@ -210,14 +149,14 @@ async function fetchAndSavePositions() {
                WHERE driver_number = $1
                  AND position = $2
                  AND date = $3`,
-              [pos.driver_number, position, date]
+              [pos.driver_number, position, fakeDate]
             );
 
             if (exists.rows.length === 0) {
               await client.query(
                 `INSERT INTO position_history (session_key, driver_number, full_name, team_name, position, date)
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [sessionKey, pos.driver_number, full_name, team_name, position, date]
+                [sessionKey, pos.driver_number, full_name, team_name, position, fakeDate]
               );
               console.log(`✅ Inserted (simulated): ${full_name} - Position ${position}`);
             }
@@ -279,115 +218,75 @@ async function fetchAndSavePositions() {
   }
 }
 
-cron.schedule('*/3 * * * * *', () => {
+cron.schedule('*/5 * * * * *', () => {
   fetchAndSavePositions();
 });
 
 // Enhanced API endpoints with detailed logging
 app.get('/api/current_positions', async (req, res) => {
-  console.log('\n=== API: /api/current_positions called ===');
-  console.log(`Mode: ${TESTING_MODE ? 'TEST' : 'LIVE'}`);
-
   try {
-    const sessionKey = await fetchLatestRaceSessionKey();
-    console.log(`Session key for current_positions: ${sessionKey}`);
-
+    //const sessionKey = await fetchLatestRaceSessionKey();
+    const sessionKey = '9971';
     if (!sessionKey) {
-      console.warn("API: /api/current_positions - No session found.");
-      return res.json([]);
+      return res.status(404).json({message: "No active session found."});
+    }
+    const positionResponse = await fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}&order=desc&limit=500`);
+
+    const positionData = await positionResponse.json();
+
+    const driversResponse = await fetch('https://api.openf1.org/v1/drivers');
+    const drivers = await driversResponse.json();
+
+    const validTeams = ['Red Bull Racing', 'Ferrari', 'Mercedes', 'McLaren', 'Aston Martin',
+      'Alpine', 'Williams', 'Haas F1 Team', 'Racing Bulls', 'Kick Sauber'];
+
+    const currentPositions = [];
+
+    for (const pos of positionData) {
+      const driverInfo = drivers.find(d => d.driver_number == pos.driver_number);
+
+      if (pos.position != null && driverInfo && validTeams.includes(driverInfo.team_name)) {
+        currentPositions.push({
+          driver_number: pos.driver_number,
+          team_name: driverInfo.team_name,
+          full_name: `${driverInfo.first_name} ${driverInfo.last_name}`,
+          position: pos.position
+        });
+      }
     }
 
-    if (TESTING_MODE) {
-      // In test mode, get positions from our database (simulated live data)
-      console.log("🧪 TEST MODE: Getting positions from database");
+    // ✅ Deduplicate by driver_number
+    const seen = new Set();
+    const uniquePositions = [];
 
-      const result = await pool.query(
-        `SELECT DISTINCT ON (driver_number) driver_number,
-                                            full_name,
-                                            team_name,
-                                            position,
-                                            date
-         FROM position_history
-         WHERE session_key = $1
-         ORDER BY driver_number, date DESC`,
-        [sessionKey]
-      );
-
-      const currentPositions = result.rows.map(row => ({
-        driver_number: row.driver_number,
-        position: row.position,
-        date: row.date.toISOString(),
-        full_name: row.full_name,
-        team_name: row.team_name
-      }));
-
-      currentPositions.sort((a, b) => a.position - b.position);
-
-      console.log(`Returning ${currentPositions.length} positions from database`);
-      res.json(currentPositions);
-
-    } else {
-      // Live mode - get from OpenF1 API
-      console.log("🔴 LIVE MODE: Getting positions from OpenF1 API");
-
-      const positionResponse = await fetch(`https://api.openf1.org/v1/position?session_key=${sessionKey}&date=latest`);
-
-      if (!positionResponse.ok) {
-        console.error(`HTTP error from OpenF1 position API: ${positionResponse.status}`);
-        return res.json([]);
+    for (const entry of currentPositions) {
+      if (!seen.has(entry.driver_number)) {
+        uniquePositions.push(entry);
+        seen.add(entry.driver_number);
       }
-
-      const positionData = await positionResponse.json();
-
-      if (positionData.length === 0) {
-        console.warn(`No current position data from OpenF1 for session ${sessionKey}`);
-        return res.json([]);
-      }
-
-      const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`);
-
-      if (!driverResponse.ok) {
-        console.error(`HTTP error from OpenF1 drivers API: ${driverResponse.status}`);
-        return res.json([]);
-      }
-
-      const driverData = await driverResponse.json();
-      const driverMap = new Map(driverData.map(d => [d.driver_number, d]));
-
-      const currentPositions = positionData.map(pos => ({
-        driver_number: pos.driver_number,
-        position: pos.position,
-        date: pos.date,
-        full_name: driverMap.get(pos.driver_number)?.full_name || 'N/A',
-        team_name: driverMap.get(pos.driver_number)?.team_name || 'N/A'
-      }));
-
-      currentPositions.sort((a, b) => a.position - b.position);
-
-      console.log(`Returning ${currentPositions.length} positions from OpenF1`);
-      res.json(currentPositions);
     }
 
+    res.json(uniquePositions);
   } catch (error) {
-    console.error("API: /api/current_positions - Error:", error);
-    res.status(500).json({message: "Internal server error"});
+    console.error('Error fetching current positions:', error);
+    res.status(500).json({error: 'Internal server error'});
   }
 });
+
 
 app.get('/api/current_speed/:driverNumber', async (req, res) => {
   const {driverNumber} = req.params;
   console.log(`\n=== API: /api/current_speed/${driverNumber} called ===`);
-  console.log(`Mode: ${TESTING_MODE ? 'TEST' : 'LIVE'}`);
 
   try {
-    const sessionKey = await fetchLatestRaceSessionKey();
-
+    //const sessionKey = await fetchLatestRaceSessionKey();
+    const sessionKey = '9971';
     if (!sessionKey) {
       return res.status(404).json({message: "No active session found."});
     }
 
     // Get driver info first
-    const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}&driver_number=${driverNumber}`);
+    const driverResponse = await fetch(`https://api.openf1.org/v1/drivers?session_key=9971&driver_number=${driverNumber}`);
 
     if (!driverResponse.ok) {
       throw new Error(`HTTP error! status: ${driverResponse.status}`);
@@ -421,7 +320,7 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
       // Live mode - get real speed from OpenF1
       console.log("🔴 LIVE MODE: Getting real speed from OpenF1");
 
-      const carDataResponse = await fetch(`https://api.openf1.org/v1/car_data?session_key=${sessionKey}&driver_number=${driverNumber}`);
+      const carDataResponse = await fetch(`https://api.openf1.org/v1/car_data?session_key=9971&driver_number=${driverNumber}&limit=1&order=desc`);
 
       if (!carDataResponse.ok) {
         throw new Error(`HTTP error! status: ${carDataResponse.status}`);
@@ -433,7 +332,7 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
         return res.status(404).json({message: "No car data found for this driver in the current session."});
       }
 
-      const latestCarData = carData.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      const latestCarData = carData[0];
 
       if (!latestCarData || !latestCarData.speed) {
         return res.status(404).json({message: "Speed data not available for this driver."});
@@ -457,7 +356,8 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
 app.get('/api/positions/history/:driverNumber', async (req, res) => {
   const {driverNumber} = req.params;
   try {
-    const sessionKey = await fetchLatestRaceSessionKey();
+    //const sessionKey = await fetchLatestRaceSessionKey();
+    const sessionKey = '9971';
     if (!sessionKey) {
       return res.status(404).json({message: "No active race session found."});
     }
@@ -479,7 +379,8 @@ app.get('/api/positions/history/:driverNumber', async (req, res) => {
 
 app.get('/api/drivers_with_position_data', async (req, res) => {
   try {
-    const sessionKey = await fetchLatestRaceSessionKey();
+    //const sessionKey = await fetchLatestRaceSessionKey();
+    const sessionKey = '9971';
     if (!sessionKey) {
       return res.json([]);
     }

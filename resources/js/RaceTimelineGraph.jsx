@@ -180,7 +180,7 @@ export default function RaceTimelineGraph() {
         {isLoading && <span style={{color: '#ff6600'}}>⟳ Updating...</span>}
       </div>
 
-      {/* Error Display */}
+      {/* Error Display - lidt cute den popper op*/}
       {error && (
         <div style={{
           color: '#ff4444',
@@ -193,7 +193,7 @@ export default function RaceTimelineGraph() {
         </div>
       )}
 
-      {/* Chart */}
+      {/* Chart - tager lige nu alle værdier den får ind og sætter på. Det lidt noget rod, men altså, sådan er det jo :)) */}
       {positionHistory.length > 0 ? (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart

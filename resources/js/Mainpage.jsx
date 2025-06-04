@@ -32,17 +32,18 @@ export default function Mainpage() {
           </div>
           <SpeedDisplay/>
         </div>
+      </div>
 
-        {/* Bottom right - Race timeline */}
-        <div className="card">
-          <div className="card-title">
-            <GraphIcon className="icon" width={24} height={24}/>
-            Race timeline
-          </div>
-          <RaceTimelineGraph/>
+      {/* Bottom right - Race timeline */}
+      <div className="card timeline">
+        <div className="card-title">
+          <GraphIcon className="icon" width={24} height={24}/>
+          Race timeline
         </div>
+        <RaceTimelineGraph/>
       </div>
     </div>
+
   );
 }
 

@@ -1,7 +1,7 @@
 /* Container */
 .dashboard {
   background-color: #f1f1f1;
-  border: 1px solid #ddd;
+  border: 1px solid #3c3a3a;
   padding: 1.5rem;
   border-radius: 12px;
   max-width: 1300px;
@@ -72,3 +72,8 @@
   color: #ff1801;
   margin-right: 0.5rem;
 }
+
+.timeline {
+  margin-top: 3rem;
+}
+
