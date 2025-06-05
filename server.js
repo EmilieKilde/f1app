@@ -1,10 +1,11 @@
 import dotenv from 'dotenv';
 
-dotenv.config(); // kald config() efter import
+dotenv.config();
 
 import express from 'express';
-import pkg from 'pg'; // import as 'pkg' because Pool is a named export or property
-const {Pool} = pkg; // Destructure Pool from pkg
+import pkg from 'pg';
+
+const {Pool} = pkg;
 
 import cors from 'cors';
 import cron from 'node-cron';
@@ -84,7 +85,7 @@ async function fetchAndSavePositions() {
     console.log(`Retrieved ${positionData.length} position data points`);
 
     if (positionData.length === 0) {
-      console.warn("⚠️ No position data found for this session");
+      console.warn("No position data found for this session");
       return;
     }
 
@@ -137,7 +138,7 @@ async function fetchAndSavePositions() {
             const team_name = driverInfo.team_name;
             const position = pos.position;
             // Vi laver en fakedato
-            const fakeDate = new Date(); // Current time!
+            const fakeDate = new Date();
 
             // Randomizer lidt så vi ikke får det samme flere gange
             fakeDate.setMilliseconds(fakeDate.getMilliseconds() + Math.random() * 1000);
@@ -157,7 +158,7 @@ async function fetchAndSavePositions() {
                  VALUES ($1, $2, $3, $4, $5, $6)`,
                 [sessionKey, pos.driver_number, full_name, team_name, position, fakeDate]
               );
-              console.log(`✅ Inserted (simulated): ${full_name} - Position ${position}`);
+              console.log(`Inserted (simulated): ${full_name} - Position ${position}`);
             }
           }
         }
@@ -301,7 +302,7 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
       // simulations data til speed
       console.log("TEST MODE: Generating simulated speed data");
 
-      // Generere realistisk F1 speed (200-350 km/h)
+      // Generere realistisk F1 speed (200-350 km/h), da speed ikke gemmes i db
       const baseSpeed = 250 + Math.random() * 100; // 250-350 km/h
       const speed = Math.round(baseSpeed * 10) / 10; // Rund til 1 decimal
 
@@ -317,7 +318,7 @@ app.get('/api/current_speed/:driverNumber', async (req, res) => {
 
     } else {
       // Live mode
-      console.log("🔴 LIVE MODE: Getting real speed from OpenF1");
+      console.log("LIVE MODE: Getting real speed from OpenF1");
 
       const carDataResponse = await fetch(`https://api.openf1.org/v1/car_data?session_key=9971&driver_number=${driverNumber}&limit=1&order=desc`);
 

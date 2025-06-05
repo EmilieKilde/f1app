@@ -13,7 +13,6 @@ export default function Mainpage() {
       <h2 className="dashboard-title">
         Live <span className="highlight">F1</span> data
       </h2>
-
       <div className="dashboard-grid">
         {/* Left section - Positions */}
         <div className="card positions">
@@ -34,7 +33,7 @@ export default function Mainpage() {
         </div>
       </div>
 
-      {/* Bottom right - Race timeline */}
+      {/* Bottom - Race timeline */}
       <div className="card timeline">
         <div className="card-title">
           <GraphIcon className="icon" width={24} height={24}/>

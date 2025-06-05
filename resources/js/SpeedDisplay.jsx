@@ -10,7 +10,7 @@ export default function SpeedDisplay() {
 
   const backendUrl = 'http://localhost:3001'; // Your backend URL
 
-  // Fetch list of drivers who have position data (to select from)
+  // liste af drivers
   useEffect(() => {
     async function fetchDrivers() {
       try {
@@ -21,7 +21,7 @@ export default function SpeedDisplay() {
         const drivers = await response.json();
         setDriverOptions(drivers);
         if (drivers.length > 0) {
-          setSelectedDriver(drivers[0].driver_number); // Select the first driver by default
+          setSelectedDriver(drivers[0].driver_number); // Select første driver som default
         }
       } catch (err) {
         console.error("Error fetching driver options for SpeedDisplay:", err);
@@ -32,11 +32,11 @@ export default function SpeedDisplay() {
     fetchDrivers();
   }, []);
 
-  // Fetch speed for the selected driver
+  // Fetch speed
   useEffect(() => {
     async function fetchSpeed() {
       if (!selectedDriver) {
-        setCurrentSpeed(null); // Clear speed if no driver selected
+        setCurrentSpeed(null); // Clear speed hvis ingen driver er valgt
         return;
       }
 
@@ -58,10 +58,10 @@ export default function SpeedDisplay() {
     }
 
     fetchSpeed();
-    const interval = setInterval(fetchSpeed, 1000); // Fetch speed every 1 second
+    const interval = setInterval(fetchSpeed, 1000); // Fetch speed hvert sekund
     return () => clearInterval(interval);
 
-  }, [selectedDriver]); // Re-run when selectedDriver changes
+  }, [selectedDriver]); // Re-run når selectedDriver ændres
 
   const handleDriverChange = (event) => {
     setSelectedDriver(parseInt(event.target.value));
@@ -91,7 +91,7 @@ export default function SpeedDisplay() {
       {currentSpeed ? (
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentSpeed.speed} // Animate on speed change
+            key={currentSpeed.speed}
             initial={{opacity: 0, y: 20}}
             animate={{opacity: 1, y: 0}}
             exit={{opacity: 0, y: -20}}

@@ -10,7 +10,7 @@ export default function RaceTimelineGraph() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  console.log('🔥 Component state:', {
+  console.log('Component state:', {
     selectedDriver,
     driverOptionsLength: driverOptions.length,
     positionHistoryLength: positionHistory.length,
@@ -20,28 +20,28 @@ export default function RaceTimelineGraph() {
 
   // First useEffect: Fetch drivers (this works!)
   useEffect(() => {
-    console.log('🔥 Fetching drivers...');
+    console.log('Fetching drivers...');
 
     async function fetchDrivers() {
       try {
         const response = await fetch('http://localhost:3001/api/drivers_with_position_data');
-        console.log('🔥 Drivers response:', response.status, response.ok);
+        console.log('Drivers response:', response.status, response.ok);
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const drivers = await response.json();
-        console.log('🔥 Loaded drivers:', drivers.length);
+        console.log('Loaded drivers:', drivers.length);
 
         setDriverOptions(drivers);
 
         if (drivers.length > 0) {
           setSelectedDriver(drivers[0].driver_number);
-          console.log('🔥 Auto-selected driver:', drivers[0].driver_number);
+          console.log('Auto-selected driver:', drivers[0].driver_number);
         }
       } catch (error) {
-        console.error('🔥 Error fetching drivers:', error);
+        console.error('Error fetching drivers:', error);
         setError('Failed to load drivers: ' + error.message);
       }
     }
@@ -52,11 +52,11 @@ export default function RaceTimelineGraph() {
   // Second useEffect: Fetch position history for selected driver
   useEffect(() => {
     if (!selectedDriver) {
-      console.log('🔥 No driver selected, skipping position fetch');
+      console.log('No driver selected, skipping position fetch');
       return;
     }
 
-    console.log('🔥 Fetching position history for driver:', selectedDriver);
+    console.log('Fetching position history for driver:', selectedDriver);
 
     async function fetchPositionHistory() {
       setIsLoading(true);
@@ -64,19 +64,19 @@ export default function RaceTimelineGraph() {
 
       try {
         const response = await fetch(`http://localhost:3001/api/positions/history/${selectedDriver}`);
-        console.log('🔥 Position history response:', response.status, response.ok);
+        console.log('Position history response:', response.status, response.ok);
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         let data = await response.json();
-        console.log('🔥 Raw position data:', data);
+        console.log('Raw position data:', data);
 
         // Handle case where backend returns error object instead of array
         if (!Array.isArray(data)) {
           if (data.message) {
-            console.log('🔥 Backend message:', data.message);
+            console.log('Backend message:', data.message);
             setPositionHistory([]);
             return;
           }
@@ -89,11 +89,11 @@ export default function RaceTimelineGraph() {
           date: new Date(item.date)
         })).sort((a, b) => a.date - b.date);
 
-        console.log('🔥 Processed position data:', data.length, 'records');
+        console.log('Processed position data:', data.length, 'records');
         setPositionHistory(data);
 
       } catch (error) {
-        console.error('🔥 Error fetching position history:', error);
+        console.error('Error fetching position history:', error);
         setError('Failed to load position history: ' + error.message);
       } finally {
         setIsLoading(false);
@@ -105,7 +105,7 @@ export default function RaceTimelineGraph() {
     // Set up auto-refresh every 3 seconds
     const interval = setInterval(fetchPositionHistory, 3000);
     return () => {
-      console.log('🔥 Clearing interval for driver:', selectedDriver);
+      console.log('Clearing interval for driver:', selectedDriver);
       clearInterval(interval);
     };
 
@@ -113,7 +113,7 @@ export default function RaceTimelineGraph() {
 
   const handleDriverChange = (event) => {
     const newDriver = parseInt(event.target.value);
-    console.log('🔥 Driver changed to:', newDriver);
+    console.log('Driver changed to:', newDriver);
     setSelectedDriver(newDriver);
   };
 

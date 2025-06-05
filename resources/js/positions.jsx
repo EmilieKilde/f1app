@@ -26,15 +26,15 @@ export default function Positions() {
       }
     };
 
-    // Fetch initially
+    // Fetch
     fetchCurrentPositions();
 
-    // Set up interval to refetch every 3 seconds
+    // refresh hvert 3. sekund
     const intervalId = setInterval(fetchCurrentPositions, 3000);
 
-    // Clean up the interval on component unmount
+    // Clean up
     return () => clearInterval(intervalId);
-  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount
+  }, []); // runs once on mount and cleans up on unmount
 
   if (isLoading && positions.length === 0) {
     return <div className="positions-list">Loading positions...</div>;
@@ -53,7 +53,7 @@ export default function Positions() {
       <AnimatePresence>
         {positions.map((driver, index) => (
           <motion.div
-            key={driver.driver_number} // Use driver_number as key as it's unique and stable
+            key={driver.driver_number}
             layout
             initial={{opacity: 0, y: -20}}
             animate={{opacity: 1, y: 0}}
